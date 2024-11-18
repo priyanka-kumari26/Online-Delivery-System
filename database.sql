@@ -128,4 +128,3 @@ INSERT INTO Feedback (FeedbackID, OrderID, FeedbackDate, Rating, Review) VALUES
 (3, 3, '2021-08-04', 3.5, 'Burger was okay, nothing special.'),
 (4, 4, '2024-10-05', 4.5, 'Tacos were delicious! Will order again.'),
 (5, 5, '2023-07-06', 2.0, 'Food was cold and delivery took too long.');
-
