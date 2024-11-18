@@ -71,8 +71,7 @@ CREATE TABLE Feedback (
   Rating DECIMAL(2,1),
   Review VARCHAR(255),
   FOREIGN KEY (OrderID) REFERENCES Orders(OrderID)
-);```sql
--- Improved version of the code
+);
 
 -- Problem 5
 WITH RECURSIVE CustomerOrders AS
@@ -229,7 +228,6 @@ CALL get_order_details(1, 1);
 
 -- Query 2
 CALL get_order_details(1, 4);
-```
 
 INSERT INTO Customer (CustomerID, CName, Email, Phone, Address) VALUES
 (1, 'Prapti Arali', 'praptiarali22@gmail.com', '1234567890', 'Address1'),
