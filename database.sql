@@ -128,3 +128,159 @@ INSERT INTO Feedback (FeedbackID, OrderID, FeedbackDate, Rating, Review) VALUES
 (3, 3, '2021-08-04', 3.5, 'Burger was okay, nothing special.'),
 (4, 4, '2024-10-05', 4.5, 'Tacos were delicious! Will order again.'),
 (5, 5, '2023-07-06', 2.0, 'Food was cold and delivery took too long.');
+
+-- Problem 5
+WITH RECURSIVE CustomerOrders AS (
+   SELECT
+     CustomerID,
+     RestaurantID,
+     1 AS OrderCount
+   FROM Orders
+   UNION ALL
+   SELECT
+     co.CustomerID,
+     o.RestaurantID,
+     co.OrderCount + 1
+   FROM CustomerOrders co
+   JOIN (
+     SELECT
+       CustomerID,
+       RestaurantID,
+       OrderID,
+       ROW_NUMBER() OVER (PARTITION BY CustomerID, RestaurantID ORDER BY OrderID) AS OrderCount
+     FROM Orders
+   ) o
+     ON co.CustomerID = o.CustomerID AND co.RestaurantID = o.RestaurantID AND co.OrderCount = o.OrderCount - 1
+)
+SELECT
+  CustomerID,
+  COUNT(DISTINCT RestaurantID) AS UniqueRestaurants
+FROM CustomerOrders
+GROUP BY
+  CustomerID;
+  
+-- Function Definition for Problem-6
+DELIMITER //
+
+CREATE FUNCTION calculate_discount(p_customer_id INT)
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE order_count INT;
+    DECLARE discount_percentage INT;
+
+    -- Count the number of completed orders for the customer
+    SELECT COUNT(*) INTO order_count
+    FROM Orders
+    WHERE CustomerID = p_customer_id AND OStatus = 'Delivered';
+
+    -- Determine discount percentage based on the number of orders
+    IF order_count >= 6 THEN
+        SET discount_percentage = 20; -- 20% discount for 6 or more orders
+    ELSEIF order_count >= 3 THEN
+        SET discount_percentage = 10; -- 10% discount for 3 to 5 orders
+    ELSE
+        SET discount_percentage = 0; -- No discount for less than 3 orders
+    END IF;
+
+    RETURN discount_percentage;
+END //
+
+DELIMITER ;
+
+-- Inserting more data before running query
+INSERT INTO Orders (OrderID, CustomerID, RestaurantID, OrderDate, OStatus, TotalPrice) VALUES
+(6, 1, 1, '2023-10-01', 'Delivered', 25.00),
+(7, 1, 2, '2023-10-02', 'Delivered', 30.00),
+(8, 1, 1, '2023-10-03', 'Delivered', 20.00),
+(9, 1, 3, '2023-10-04', 'Delivered', 15.00),
+(10, 1, 4, '2023-10-05', 'Delivered', 10.00),
+(11, 2, 1, '2023-10-06', 'Delivered', 25.00),
+(12, 2, 2, '2023-10-07', 'Delivered', 30.00),
+(13, 2, 3, '2023-10-08', 'Delivered', 20.00),
+(14, 3, 4, '2023-10-09', 'Delivered', 15.00),
+(15, 4, 5, '2023-10-10', 'Delivered', 10.00);
+
+-- Query for Problem-6 
+SELECT 
+    c.CName AS CustomerName,
+    COUNT(o.OrderID) AS NumberOfOrders,
+    calculate_discount(c.CustomerID) AS DiscountPercentage
+FROM 
+    Customer c
+LEFT JOIN 
+    Orders o ON c.CustomerID = o.CustomerID
+GROUP BY 
+    c.CustomerID;
+    
+-- Problem 7
+DELIMITER //
+
+CREATE TRIGGER prevent_incomplete_order_review
+BEFORE INSERT ON Feedback
+FOR EACH ROW
+BEGIN
+    DECLARE order_status VARCHAR(255);
+    SELECT OStatus INTO order_status
+    FROM Orders
+    WHERE OrderID = NEW.OrderID;
+    
+    IF order_status <> 'Delivered' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Reviews can only be submitted for completed orders.';
+    END IF;
+END//
+
+DELIMITER ;
+    
+-- Function Definition for Problem - 9
+DELIMITER //
+
+CREATE PROCEDURE get_order_details(IN p_customer_id INT, IN p_order_id INT)
+BEGIN
+    DECLARE total_amount DECIMAL(10, 2);
+    DECLARE order_status VARCHAR(255);
+    
+    -- Check if the order exists for the given customer
+    SELECT 
+        o.OStatus,
+        SUM(oi.Quantity * m.Price) INTO order_status, total_amount
+    FROM 
+        Orders o
+    JOIN 
+        OrderItem oi ON o.OrderID = oi.OrderID
+    JOIN 
+        MenuItem m ON oi.MenuItemID = m.MenuItemID
+    WHERE 
+        o.CustomerID = p_customer_id AND o.OrderID = p_order_id
+    GROUP BY 
+        o.OrderID;
+
+    -- If no order is found, return a message
+    IF order_status IS NULL THEN
+        SELECT 'Order does not exist for the given customer ID and order ID.' AS Message;
+    ELSE
+        -- Return the order details
+        SELECT 
+            m.MName AS ItemName,
+            oi.Quantity,
+            m.Price,
+            total_amount AS TotalAmount,
+            order_status AS OrderStatus
+        FROM 
+            OrderItem oi
+        JOIN 
+            MenuItem m ON oi.MenuItemID = m.MenuItemID
+        WHERE 
+            oi.OrderID = p_order_id;
+    END IF;
+END //
+
+DELIMITER ;
+
+-- Query 1
+CALL get_order_details(1, 1);
+
+-- Query 2
+CALL get_order_details(1, 4);
+    
