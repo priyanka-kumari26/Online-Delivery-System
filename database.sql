@@ -65,13 +65,171 @@ CREATE TABLE Delivery (
 );
 
 CREATE TABLE Feedback (
-  FeedbackID INT PRIMARY KEY,
+  FeedbackID INT PRIMARY KEY AUTO_INCREMENT,
   OrderID INT,
   FeedbackDate DATE,
   Rating DECIMAL(2,1),
   Review VARCHAR(255),
   FOREIGN KEY (OrderID) REFERENCES Orders(OrderID)
-);
+);```sql
+-- Improved version of the code
+
+-- Problem 5
+WITH RECURSIVE CustomerOrders AS
+ (
+   SELECT
+     CustomerID,
+     RestaurantID,
+     1 AS OrderCount
+   FROM Orders
+   UNION ALL
+   SELECT
+     co.CustomerID,
+     o.RestaurantID,
+     co.OrderCount + 1
+   FROM CustomerOrders co
+   JOIN (
+     SELECT
+       CustomerID,
+       RestaurantID,
+       OrderID,
+       ROW_NUMBER() OVER (PARTITION BY CustomerID, RestaurantID ORDER BY OrderID) AS OrderCount
+     FROM Orders
+   ) o
+     ON co.CustomerID = o.CustomerID AND co.RestaurantID = o.RestaurantID AND co.OrderCount = o.OrderCount - 1
+)
+SELECT
+  c.CName AS CustomerName,
+  COUNT(DISTINCT co.RestaurantID) AS UniqueRestaurants
+FROM CustomerOrders co
+JOIN Customer c ON co.CustomerID = c.CustomerID
+GROUP BY
+  co.CustomerID, c.CName;
+
+-- Function Definition for Problem-6
+DELIMITER //
+
+CREATE FUNCTION calculate_discount(p_customer_id INT)
+RETURNS DECIMAL(5,2)
+DETERMINISTIC
+BEGIN
+    DECLARE order_count INT;
+    DECLARE discount_percentage DECIMAL(5,2);
+
+    -- Count the number of completed orders for the customer
+    SELECT COUNT(*) INTO order_count
+    FROM Orders
+    WHERE CustomerID = p_customer_id AND OStatus = 'Delivered';
+
+    -- Determine discount percentage based on the number of orders
+    IF order_count >= 6 THEN
+        SET discount_percentage = 0.20; -- 20% discount for 6 or more orders
+    ELSEIF order_count >= 3 THEN
+        SET discount_percentage = 0.10; -- 10% discount for 3 to 5 orders
+    ELSE
+        SET discount_percentage = 0.00; -- No discount for less than 3 orders
+    END IF;
+
+    RETURN discount_percentage;
+END //
+
+DELIMITER ;
+
+-- Query for Problem-6 
+SELECT 
+    c.CName AS CustomerName,
+    COUNT(o.OrderID) AS NumberOfOrders,
+    calculate_discount(c.CustomerID) AS DiscountPercentage
+FROM 
+    Customer c
+LEFT JOIN 
+    Orders o ON c.CustomerID = o.CustomerID
+GROUP BY 
+    c.CustomerID;
+
+-- Problem 7
+DELIMITER //
+
+CREATE TRIGGER prevent_incomplete_order_review
+BEFORE INSERT ON Feedback
+FOR EACH ROW
+BEGIN
+    DECLARE order_status VARCHAR(255);
+    SELECT OStatus INTO order_status
+    FROM Orders
+    WHERE OrderID = NEW.OrderID;
+    
+    IF order_status <> 'Delivered' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Reviews can only be submitted for completed orders.';
+    END IF;
+END//
+
+DELIMITER ;
+
+-- Codes used in Problem- 8
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+
+--Start Transaction A
+INSERT INTO Orders (OrderID, CustomerID, RestaurantID, OrderDate, OStatus, TotalPrice) VALUES (202, 1, 1, '2023-10-11', 'Pending', 500.00);
+
+SELECT TotalPrice FROM Orders WHERE OrderID = 202; -- Should return 500.00
+
+BEGIN; -- Start Transaction B
+
+UPDATE Orders SET TotalPrice = TotalPrice + 200 WHERE OrderID = 202;
+
+-- Function Definition for Problem - 9
+DELIMITER //
+
+CREATE PROCEDURE get_order_details(IN p_customer_id INT, IN p_order_id INT)
+BEGIN
+    DECLARE total_amount DECIMAL(10, 2);
+    DECLARE order_status VARCHAR(255);
+    
+    -- Check if the order exists for the given customer
+    SELECT 
+        o.OStatus,
+        SUM(oi.Quantity * m.Price) INTO order_status, total_amount
+    FROM 
+        Orders o
+    JOIN 
+        OrderItem oi ON o.OrderID = oi.OrderID
+    JOIN 
+        MenuItem m ON oi.MenuItemID = m.MenuItemID
+    WHERE 
+        o.CustomerID = p_customer_id AND o.OrderID = p_order_id
+    GROUP BY 
+        o.OrderID;
+
+    -- If no order is found, return a message
+    IF order_status IS NULL THEN
+        SELECT 'Order does not exist for the given customer ID and order ID.' AS Message;
+    ELSE
+        -- Return the order details
+        SELECT 
+            m.MName AS ItemName,
+            oi.Quantity,
+            m.Price,
+            total_amount AS TotalAmount,
+            order_status AS OrderStatus
+        FROM 
+            OrderItem oi
+        JOIN 
+            MenuItem m ON oi.MenuItemID = m.MenuItemID
+        WHERE 
+            oi.OrderID = p_order_id;
+    END IF;
+END //
+
+DELIMITER ;
+
+-- Query 1
+CALL get_order_details(1, 1);
+
+-- Query 2
+CALL get_order_details(1, 4);
+```
 
 INSERT INTO Customer (CustomerID, CName, Email, Phone, Address) VALUES
 (1, 'Prapti Arali', 'praptiarali22@gmail.com', '1234567890', 'Address1'),
@@ -237,8 +395,7 @@ DELIMITER ;
 SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 
 --Start Transaction A
-INSERT INTO Orders (OrderID, CustomerID, RestaurantID, OrderDate, OStatus, TotalPrice)
--> VALUES (202, 1, 1, '2023-10-11', 'Pending', 500.00);
+INSERT INTO Orders (OrderID, CustomerID, RestaurantID, OrderDate, OStatus, TotalPrice)-> VALUES (202, 1, 1, '2023-10-11', 'Pending', 500.00);
 
 SELECT TotalPrice FROM Orders WHERE OrderID = 202; -- Should return 500.00
 
@@ -246,8 +403,6 @@ BEGIN; -- Start Transaction B
 
 UPDATE Orders SET TotalPrice = TotalPrice + 200 WHERE OrderID = 202;
 
-
-    
 -- Function Definition for Problem - 9
 DELIMITER //
 
